@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ateliercode-server.fullname" . }}
+  labels:
+    {{- include "ateliercode-server.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ateliercode-server.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ateliercode-server.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          env:
+            - name: PORT
+              value: "8080"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ateliercode-server.fullname" . }}-secrets
+                  key: jwt-secret
+            - name: JWT_EXPIRES_IN
+              value: {{ .Values.config.jwtExpiresIn | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ateliercode-server.fullname" . }}-secrets
+                  key: database-url
+            - name: ALLOWED_ORIGINS
+              value: {{ .Values.config.allowedOrigins | quote }}
+            - name: STUN_SERVERS
+              value: {{ .Values.config.stunServers | quote }}
+            - name: TURN_URL
+              value: {{ .Values.config.turnUrl | quote }}
+            - name: TURN_TCP_URL
+              value: {{ .Values.config.turnTcpUrl | quote }}
+            - name: TURNS_URL
+              value: {{ .Values.config.turnsUrl | quote }}
+            - name: TURN_USERNAME
+              value: {{ .Values.config.turnUsername | quote }}
+            - name: TURN_CREDENTIAL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ateliercode-server.fullname" . }}-secrets
+                  key: turn-credential
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
