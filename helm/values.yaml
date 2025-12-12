@@ -31,14 +31,14 @@ ingress:
     nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
   hosts:
-    - host: ateliercode-server.rcmedicalspecialist.com
+    - host: api.ateliercode.dev
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: ateliercode-server-tls
       hosts:
-        - ateliercode-server.rcmedicalspecialist.com
+        - api.ateliercode.dev
 
 resources:
   limits:
@@ -58,7 +58,7 @@ config:
   databaseUrl: ""
 
   # CORS - allowed origins (comma-separated)
-  allowedOrigins: "https://ateliercode.rcmedicalspecialist.com,http://localhost:1420"
+  allowedOrigins: "https://ateliercode.dev,https://app.ateliercode.dev,http://localhost:1420,tauri://localhost"
 
   # TURN/STUN servers (uses existing COTURN from RCMS)
   stunServers: "stun:app.rcmedicalspecialist.com:3478,stun:stun.l.google.com:19302"
