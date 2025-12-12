@@ -98,11 +98,12 @@ jobs:
           # Get the short SHA
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
 
-          # Update the tag in values.yaml
-          sed -i "s/tag: \".*\"/tag: \"${SHORT_SHA}\"/" helm/values.yaml
+          # Update ONLY the main image tag (line 13 in values.yaml)
+          # Using line-specific replacement to avoid changing postgresql image tag
+          sed -i '13s/tag: ".*"/tag: "'"${SHORT_SHA}"'"/' helm/values.yaml
 
           echo "Updated image tag to: ${SHORT_SHA}"
-          cat helm/values.yaml | grep -A2 "image:"
+          cat helm/values.yaml | grep -A2 "^image:"
 
       - name: Commit and push changes
         run: |

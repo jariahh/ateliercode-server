@@ -79,7 +79,7 @@ postgresql:
   image:
     registry: docker.io
     repository: bitnamisecure/postgresql
-    tag: "e11c235"
+    tag: "latest"
   primary:
     persistence:
       enabled: true
