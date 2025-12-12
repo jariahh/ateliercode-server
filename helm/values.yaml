@@ -10,7 +10,7 @@ secrets:
 image:
   repository: ghcr.io/jariahh/ateliercode-server
   pullPolicy: IfNotPresent
-  tag: "9d7c838"
+  tag: "e11c235"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -79,7 +79,7 @@ postgresql:
   image:
     registry: docker.io
     repository: bitnamisecure/postgresql
-    tag: "latest"
+    tag: "e11c235"
   primary:
     persistence:
       enabled: true
