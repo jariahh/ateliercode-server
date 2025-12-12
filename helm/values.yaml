@@ -76,6 +76,10 @@ postgresql:
     database: ateliercode
     password: "ateliercode-db-pass-2024"
     postgresPassword: "ateliercode-postgres-2024"
+  image:
+    registry: docker.io
+    repository: bitnamisecure/postgresql
+    tag: "latest"
   primary:
     persistence:
       enabled: true
