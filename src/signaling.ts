@@ -11,10 +11,11 @@ import type {
 } from './types.js';
 import { canUserAccessMachine, getMachineById } from './machines.js';
 
-// Track active connections between machines
+// Track active connections between machines/clients
 interface PendingConnection {
   id: string;
-  fromMachineId: string;
+  fromMachineId: string | null; // null for web clients
+  fromClientId: string; // unique client ID for web clients
   toMachineId: string;
   fromClient: ConnectedClient;
   createdAt: Date;
@@ -24,6 +25,10 @@ const pendingConnections = new Map<string, PendingConnection>();
 
 // Map machine IDs to their connected WebSocket clients
 const machineClients = new Map<string, ConnectedClient>();
+
+// Map client IDs to their connected WebSocket clients (for web clients without machines)
+const webClients = new Map<string, ConnectedClient>();
+let webClientCounter = 0;
 
 export function registerMachineClient(machineId: string, client: ConnectedClient) {
   machineClients.set(machineId, client);
@@ -43,8 +48,9 @@ export async function handleConnectToMachine(
 ): Promise<void> {
   const { targetMachineId } = payload;
 
-  if (!client.userId || !client.machineId) {
-    sendError(client.ws, 'NOT_AUTHENTICATED', 'Must be authenticated with a machine');
+  // Must be authenticated (but machineId is optional for web clients)
+  if (!client.userId) {
+    sendError(client.ws, 'NOT_AUTHENTICATED', 'Must be authenticated');
     return;
   }
 
@@ -62,11 +68,20 @@ export async function handleConnectToMachine(
     return;
   }
 
-  // Get source machine info
-  const sourceMachine = await getMachineById(client.machineId);
-  if (!sourceMachine) {
-    sendError(client.ws, 'MACHINE_NOT_FOUND', 'Source machine not found');
-    return;
+  // Generate a client ID for web clients that don't have a machineId
+  let clientId = client.machineId;
+  if (!clientId) {
+    clientId = `web-client-${++webClientCounter}`;
+    webClients.set(clientId, client);
+  }
+
+  // Get source name (machine name or "Web Client")
+  let sourceName = 'Web Client';
+  if (client.machineId) {
+    const sourceMachine = await getMachineById(client.machineId);
+    if (sourceMachine) {
+      sourceName = sourceMachine.name;
+    }
   }
 
   // Create pending connection
@@ -74,6 +89,7 @@ export async function handleConnectToMachine(
   const pending: PendingConnection = {
     id: connectionId,
     fromMachineId: client.machineId,
+    fromClientId: clientId,
     toMachineId: targetMachineId,
     fromClient: client,
     createdAt: new Date(),
@@ -82,8 +98,8 @@ export async function handleConnectToMachine(
 
   // Send connection request to target machine
   const requestPayload: ConnectionRequestPayload = {
-    fromMachineId: client.machineId,
-    fromMachineName: sourceMachine.name,
+    fromMachineId: clientId, // Use clientId which works for both machine and web clients
+    fromMachineName: sourceName,
     connectionId,
   };
 
@@ -96,6 +112,10 @@ export async function handleConnectToMachine(
   setTimeout(() => {
     if (pendingConnections.has(connectionId)) {
       pendingConnections.delete(connectionId);
+      // Clean up web client tracking
+      if (!client.machineId && clientId) {
+        webClients.delete(clientId);
+      }
       sendError(client.ws, 'CONNECTION_TIMEOUT', 'Connection request timed out');
     }
   }, 30000);
@@ -157,6 +177,11 @@ export function handleConnectionRejected(
   pendingConnections.delete(connectionId);
 }
 
+// Helper to get client by ID (either machine or web client)
+function getClientById(clientId: string): ConnectedClient | undefined {
+  return machineClients.get(clientId) || webClients.get(clientId);
+}
+
 export function handleRTCOffer(
   client: ConnectedClient,
   payload: RTCOfferPayload
@@ -169,8 +194,12 @@ export function handleRTCOffer(
     return;
   }
 
-  // Verify the client is part of this connection
-  if (client.machineId !== pending.fromMachineId && client.machineId !== pending.toMachineId) {
+  // Verify the client is part of this connection (check both machineId and clientId)
+  const clientIdentifier = client.machineId || pending.fromClientId;
+  const isFromClient = pending.fromClient === client || clientIdentifier === pending.fromClientId;
+  const isToClient = client.machineId === pending.toMachineId;
+
+  if (!isFromClient && !isToClient) {
     sendError(client.ws, 'INVALID_CONNECTION', 'You are not part of this connection');
     return;
   }
@@ -182,11 +211,14 @@ export function handleRTCOffer(
     return;
   }
 
+  // Use clientId for web clients, machineId for machine clients
+  const senderClientId = client.machineId || pending.fromClientId;
+
   send(targetClient.ws, {
     type: 'rtc_offer',
     payload: {
       connectionId,
-      targetMachineId: client.machineId, // The sender becomes the target for the response
+      targetMachineId: senderClientId, // The sender becomes the target for the response
       sdp,
     },
   });
@@ -204,10 +236,10 @@ export function handleRTCAnswer(
     return;
   }
 
-  // Forward answer to target
-  const targetClient = machineClients.get(targetMachineId);
+  // Forward answer to target (could be machine or web client)
+  const targetClient = getClientById(targetMachineId);
   if (!targetClient) {
-    sendError(client.ws, 'MACHINE_OFFLINE', 'Target machine went offline');
+    sendError(client.ws, 'MACHINE_OFFLINE', 'Target went offline');
     return;
   }
 
@@ -215,12 +247,15 @@ export function handleRTCAnswer(
     type: 'rtc_answer',
     payload: {
       connectionId,
-      targetMachineId: client.machineId,
+      targetMachineId: client.machineId || pending.toMachineId,
       sdp,
     },
   });
 
-  // Connection established, clean up pending
+  // Connection established, clean up pending and web client tracking
+  if (pending.fromClientId && !pending.fromMachineId) {
+    webClients.delete(pending.fromClientId);
+  }
   pendingConnections.delete(connectionId);
 }
 
@@ -230,18 +265,22 @@ export function handleRTCIceCandidate(
 ): void {
   const { connectionId, targetMachineId, candidate, sdpMid, sdpMLineIndex } = payload;
 
-  // Forward ICE candidate to target
-  const targetClient = machineClients.get(targetMachineId);
+  // Forward ICE candidate to target (could be machine or web client)
+  const targetClient = getClientById(targetMachineId);
   if (!targetClient) {
     // Target offline, ignore
     return;
   }
 
+  // Get sender's client ID from pending connection if they're a web client
+  const pending = pendingConnections.get(connectionId);
+  const senderClientId = client.machineId || (pending?.fromClientId);
+
   send(targetClient.ws, {
     type: 'rtc_ice_candidate',
     payload: {
       connectionId,
-      targetMachineId: client.machineId,
+      targetMachineId: senderClientId,
       candidate,
       sdpMid,
       sdpMLineIndex,
