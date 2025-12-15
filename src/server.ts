@@ -34,13 +34,23 @@ import type {
 
 const clients = new Map<WSWebSocket, ConnectedClient>();
 
+// Helper to read request body
+function readBody(req: import('http').IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => (body += chunk));
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
 export function createWSServer() {
-  const server = createServer((req, res) => {
+  const server = createServer(async (req, res) => {
     // CORS headers for HTTP endpoints
     const origin = req.headers.origin || '';
     if (config.cors.allowedOrigins.includes(origin) || config.cors.allowedOrigins.includes('*')) {
       res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     }
 
@@ -75,6 +85,98 @@ export function createWSServer() {
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ iceServers }));
+      return;
+    }
+
+    // HTTP Auth endpoints for web app
+    if (req.url === '/auth/login' && req.method === 'POST') {
+      try {
+        const body = await readBody(req);
+        const { email, password } = JSON.parse(body);
+
+        if (!email || !password) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Email and password required' }));
+          return;
+        }
+
+        const result = await loginUser(email, password);
+
+        if (result.success) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } else {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        }
+      } catch (error) {
+        console.error('Login endpoint error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Internal server error' }));
+      }
+      return;
+    }
+
+    if (req.url === '/auth/register' && req.method === 'POST') {
+      try {
+        const body = await readBody(req);
+        const { email, username, password } = JSON.parse(body);
+
+        if (!email || !username || !password) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Email, username, and password required' }));
+          return;
+        }
+
+        const result = await registerUser(email, username, password);
+
+        if (result.success) {
+          res.writeHead(201, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } else {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        }
+      } catch (error) {
+        console.error('Register endpoint error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Internal server error' }));
+      }
+      return;
+    }
+
+    if (req.url === '/auth/me' && req.method === 'GET') {
+      try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'No token provided' }));
+          return;
+        }
+
+        const token = authHeader.slice(7);
+        const decoded = verifyToken(token);
+
+        if (!decoded) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid or expired token' }));
+          return;
+        }
+
+        const user = await getUserById(decoded.userId);
+        if (!user) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'User not found' }));
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(user));
+      } catch (error) {
+        console.error('Auth me endpoint error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal server error' }));
+      }
       return;
     }
 
