@@ -129,3 +129,30 @@ export async function canUserAccessMachine(
 
   return result.rows.length > 0;
 }
+
+export async function deleteMachine(
+  userId: string,
+  machineId: string
+): Promise<boolean> {
+  // Only allow users to delete their own machines
+  const result = await query(
+    `DELETE FROM machines WHERE id = $1 AND user_id = $2 RETURNING id`,
+    [machineId, userId]
+  );
+
+  return result.rows.length > 0;
+}
+
+export async function renameMachine(
+  userId: string,
+  machineId: string,
+  newName: string
+): Promise<boolean> {
+  // Only allow users to rename their own machines
+  const result = await query(
+    `UPDATE machines SET name = $3 WHERE id = $1 AND user_id = $2 RETURNING id`,
+    [machineId, userId, newName]
+  );
+
+  return result.rows.length > 0;
+}

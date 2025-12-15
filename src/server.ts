@@ -8,6 +8,8 @@ import {
   updateMachineHeartbeat,
   getMachinesForUser,
   markStaleOffline,
+  deleteMachine,
+  renameMachine,
 } from './machines.js';
 import {
   registerMachineClient,
@@ -285,6 +287,36 @@ async function handleMessage(client: ConnectedClient, message: WSMessage): Promi
         type: 'machines_list',
         id,
         payload: { machines },
+      });
+      break;
+    }
+
+    case 'delete_machine': {
+      if (!client.authenticated || !client.userId) {
+        sendError(client.ws, 'NOT_AUTHENTICATED', 'Must authenticate first');
+        return;
+      }
+      const { machineId: deleteMachineId } = payload as { machineId: string };
+      const deleted = await deleteMachine(client.userId, deleteMachineId);
+      send(client.ws, {
+        type: 'delete_machine_response',
+        id,
+        payload: { success: deleted, machineId: deleteMachineId },
+      });
+      break;
+    }
+
+    case 'rename_machine': {
+      if (!client.authenticated || !client.userId) {
+        sendError(client.ws, 'NOT_AUTHENTICATED', 'Must authenticate first');
+        return;
+      }
+      const { machineId: renameMachineId, newName } = payload as { machineId: string; newName: string };
+      const renamed = await renameMachine(client.userId, renameMachineId, newName);
+      send(client.ws, {
+        type: 'rename_machine_response',
+        id,
+        payload: { success: renamed, machineId: renameMachineId, newName },
       });
       break;
     }
