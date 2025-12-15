@@ -88,7 +88,7 @@ export async function handleConnectToMachine(
   const connectionId = uuidv4();
   const pending: PendingConnection = {
     id: connectionId,
-    fromMachineId: client.machineId,
+    fromMachineId: client.machineId ?? null,
     fromClientId: clientId,
     toMachineId: targetMachineId,
     fromClient: client,
