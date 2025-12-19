@@ -52,7 +52,7 @@ resources:
 config:
   # JWT secret - MUST be overridden in production
   jwtSecret: ""
-  jwtExpiresIn: "7d"
+  jwtExpiresIn: "30d"
 
   # Database connection
   databaseUrl: ""

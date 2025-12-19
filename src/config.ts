@@ -10,7 +10,7 @@ export const config = {
 
   jwt: {
     secret: process.env.JWT_SECRET || 'development-secret-change-in-production',
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    expiresIn: process.env.JWT_EXPIRES_IN || '30d',
   },
 
   cors: {
