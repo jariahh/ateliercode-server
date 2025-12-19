@@ -10,7 +10,7 @@ secrets:
 image:
   repository: ghcr.io/jariahh/ateliercode-server
   pullPolicy: IfNotPresent
-  tag: "7ca0ca2"
+  tag: "292bc96"
 
 imagePullSecrets: []
 nameOverride: ""
