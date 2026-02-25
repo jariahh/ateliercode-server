@@ -36,12 +36,6 @@ echo "Please enter the secret values:"
 echo ""
 
 # Prompt for values
-read -p "JWT Secret (min 64 chars, leave empty to generate): " JWT_SECRET
-if [ -z "$JWT_SECRET" ]; then
-    JWT_SECRET=$(openssl rand -base64 48)
-    echo -e "Generated JWT Secret: ${GREEN}${JWT_SECRET}${NC}"
-fi
-
 read -p "PostgreSQL Password: " PG_PASSWORD
 if [ -z "$PG_PASSWORD" ]; then
     echo -e "${RED}Error: PostgreSQL password is required${NC}"
@@ -69,7 +63,6 @@ metadata:
   namespace: default
 type: Opaque
 stringData:
-  jwt-secret: "${JWT_SECRET}"
   database-url: "${DATABASE_URL}"
   turn-credential: "${TURN_CREDENTIAL}"
 EOF
