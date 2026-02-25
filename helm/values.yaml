@@ -45,9 +45,10 @@ resources:
 
 # Environment configuration
 config:
-  # JWT secret - MUST be overridden in production
-  jwtSecret: ""
-  jwtExpiresIn: "30d"
+  # Keycloak OIDC configuration
+  keycloakUrl: "https://keycloak.unveiledsoftwaresolutions.com"
+  keycloakRealm: "ateliercode"
+  keycloakClientId: "ateliercode-server"
 
   # Database connection
   databaseUrl: ""
@@ -69,8 +70,8 @@ postgresql:
   auth:
     username: ateliercode
     database: ateliercode
-    password: "ateliercode-db-pass-2024"
-    postgresPassword: "ateliercode-postgres-2024"
+    password: ""
+    postgresPassword: ""
   image:
     registry: docker.io
     repository: bitnamisecure/postgresql

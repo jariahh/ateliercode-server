@@ -43,13 +43,12 @@ spec:
               value: "8080"
             - name: HOST
               value: "0.0.0.0"
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "ateliercode-server.fullname" . }}-secrets
-                  key: jwt-secret
-            - name: JWT_EXPIRES_IN
-              value: {{ .Values.config.jwtExpiresIn | quote }}
+            - name: KEYCLOAK_URL
+              value: {{ .Values.config.keycloakUrl | quote }}
+            - name: KEYCLOAK_REALM
+              value: {{ .Values.config.keycloakRealm | quote }}
+            - name: KEYCLOAK_CLIENT_ID
+              value: {{ .Values.config.keycloakClientId | quote }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

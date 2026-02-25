@@ -15,15 +15,12 @@
   "license": "MIT",
   "dependencies": {
     "ws": "^8.18.0",
-    "jsonwebtoken": "^9.0.2",
-    "bcryptjs": "^2.4.3",
+    "jose": "^5.9.6",
     "pg": "^8.13.1",
     "uuid": "^11.0.3",
     "dotenv": "^16.4.7"
   },
   "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
     "@types/uuid": "^10.0.0",

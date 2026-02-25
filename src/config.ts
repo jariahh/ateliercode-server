@@ -1,5 +1,8 @@
 import 'dotenv/config';
 
+const keycloakServerUrl = process.env.KEYCLOAK_URL || 'https://keycloak.unveiledsoftwaresolutions.com';
+const keycloakRealm = process.env.KEYCLOAK_REALM || 'ateliercode';
+
 export const config = {
   port: parseInt(process.env.PORT || '8080', 10),
   host: process.env.HOST || '0.0.0.0',
@@ -8,9 +11,12 @@ export const config = {
     url: process.env.DATABASE_URL || 'postgresql://localhost:5432/ateliercode',
   },
 
-  jwt: {
-    secret: process.env.JWT_SECRET || 'development-secret-change-in-production',
-    expiresIn: process.env.JWT_EXPIRES_IN || '30d',
+  keycloak: {
+    serverUrl: keycloakServerUrl,
+    realm: keycloakRealm,
+    clientId: process.env.KEYCLOAK_CLIENT_ID || 'ateliercode-server',
+    jwksUrl: `${keycloakServerUrl}/realms/${keycloakRealm}/protocol/openid-connect/certs`,
+    issuer: `${keycloakServerUrl}/realms/${keycloakRealm}`,
   },
 
   cors: {

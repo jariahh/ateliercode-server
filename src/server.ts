@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket as WSWebSocket } from 'ws';
 import { createServer } from 'http';
 import { config } from './config.js';
-import { verifyToken, loginUser, registerUser, getUserById } from './auth.js';
+import { verifyToken } from './auth.js';
 import {
   registerMachine,
   updateMachineOnlineStatus,
@@ -26,7 +26,6 @@ import type {
   ConnectedClient,
   WSMessage,
   AuthPayload,
-  RegisterUserPayload,
   RegisterMachinePayload,
   ConnectToMachinePayload,
   RTCOfferPayload,
@@ -35,16 +34,6 @@ import type {
 } from './types.js';
 
 const clients = new Map<WSWebSocket, ConnectedClient>();
-
-// Helper to read request body
-function readBody(req: import('http').IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', (chunk) => (body += chunk));
-    req.on('end', () => resolve(body));
-    req.on('error', reject);
-  });
-}
 
 export function createWSServer() {
   const server = createServer(async (req, res) => {
@@ -63,7 +52,7 @@ export function createWSServer() {
       return;
     }
 
-    // Simple health check endpoint
+    // Health check endpoint
     if (req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok', clients: clients.size }));
@@ -90,63 +79,7 @@ export function createWSServer() {
       return;
     }
 
-    // HTTP Auth endpoints for web app
-    if (req.url === '/auth/login' && req.method === 'POST') {
-      try {
-        const body = await readBody(req);
-        const { email, password } = JSON.parse(body);
-
-        if (!email || !password) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: 'Email and password required' }));
-          return;
-        }
-
-        const result = await loginUser(email, password);
-
-        if (result.success) {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } else {
-          res.writeHead(401, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        }
-      } catch (error) {
-        console.error('Login endpoint error:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, error: 'Internal server error' }));
-      }
-      return;
-    }
-
-    if (req.url === '/auth/register' && req.method === 'POST') {
-      try {
-        const body = await readBody(req);
-        const { email, username, password } = JSON.parse(body);
-
-        if (!email || !username || !password) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: 'Email, username, and password required' }));
-          return;
-        }
-
-        const result = await registerUser(email, username, password);
-
-        if (result.success) {
-          res.writeHead(201, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } else {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        }
-      } catch (error) {
-        console.error('Register endpoint error:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, error: 'Internal server error' }));
-      }
-      return;
-    }
-
+    // GET /auth/me — validate Keycloak token and return user info
     if (req.url === '/auth/me' && req.method === 'GET') {
       try {
         const authHeader = req.headers.authorization;
@@ -157,18 +90,11 @@ export function createWSServer() {
         }
 
         const token = authHeader.slice(7);
-        const decoded = verifyToken(token);
+        const user = await verifyToken(token);
 
-        if (!decoded) {
+        if (!user) {
           res.writeHead(401, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Invalid or expired token' }));
-          return;
-        }
-
-        const user = await getUserById(decoded.userId);
-        if (!user) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'User not found' }));
           return;
         }
 
@@ -179,6 +105,17 @@ export function createWSServer() {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Internal server error' }));
       }
+      return;
+    }
+
+    // Keycloak OIDC config for frontend discovery
+    if (req.url === '/auth/config' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        keycloakUrl: config.keycloak.serverUrl,
+        realm: config.keycloak.realm,
+        clientId: 'ateliercode-app',
+      }));
       return;
     }
 
@@ -249,12 +186,6 @@ async function handleMessage(client: ConnectedClient, message: WSMessage): Promi
     case 'auth': {
       const authPayload = payload as AuthPayload;
       await handleAuth(client, authPayload, id);
-      break;
-    }
-
-    case 'register_user': {
-      const regUserPayload = payload as RegisterUserPayload;
-      await handleRegisterUser(client, regUserPayload, id);
       break;
     }
 
@@ -366,57 +297,33 @@ async function handleAuth(
   payload: AuthPayload,
   messageId?: string
 ): Promise<void> {
-  let response;
-
-  if (payload.token) {
-    // Authenticate with existing token
-    const decoded = verifyToken(payload.token);
-    if (!decoded) {
-      response = { success: false, error: 'Invalid or expired token' };
-    } else {
-      const user = await getUserById(decoded.userId);
-      if (!user) {
-        response = { success: false, error: 'User not found' };
-      } else {
-        client.authenticated = true;
-        client.userId = user.id;
-        response = { success: true, user };
-      }
-    }
-  } else if (payload.email && payload.password) {
-    // Login with credentials
-    response = await loginUser(payload.email, payload.password);
-    if (response.success && response.user) {
-      client.authenticated = true;
-      client.userId = response.user.id;
-    }
-  } else {
-    response = { success: false, error: 'Must provide token or email/password' };
+  if (!payload.token) {
+    send(client.ws, {
+      type: 'auth_response',
+      id: messageId,
+      payload: { success: false, error: 'Token required' },
+    });
+    return;
   }
+
+  const user = await verifyToken(payload.token);
+
+  if (!user) {
+    send(client.ws, {
+      type: 'auth_response',
+      id: messageId,
+      payload: { success: false, error: 'Invalid or expired token' },
+    });
+    return;
+  }
+
+  client.authenticated = true;
+  client.userId = user.id;
 
   send(client.ws, {
     type: 'auth_response',
     id: messageId,
-    payload: response,
-  });
-}
-
-async function handleRegisterUser(
-  client: ConnectedClient,
-  payload: RegisterUserPayload,
-  messageId?: string
-): Promise<void> {
-  const response = await registerUser(payload.email, payload.username, payload.password);
-
-  if (response.success && response.user) {
-    client.authenticated = true;
-    client.userId = response.user.id;
-  }
-
-  send(client.ws, {
-    type: 'register_user_response',
-    id: messageId,
-    payload: response,
+    payload: { success: true, user },
   });
 }
 

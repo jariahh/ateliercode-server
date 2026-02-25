@@ -1,26 +1,6 @@
 // Shared types for AtelierCode server
 import type { WebSocket as WSWebSocket } from 'ws';
 
-// Database row types (snake_case from PostgreSQL)
-export interface DBUser {
-  id: string;
-  email: string;
-  username: string;
-  password_hash: string;
-  created_at: Date;
-  updated_at: Date;
-}
-
-// Application types (camelCase)
-export interface User {
-  id: string;
-  email: string;
-  username: string;
-  passwordHash: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 export interface Machine {
   id: string;
   userId: string;
@@ -39,21 +19,10 @@ export interface MachineCapabilities {
   hasPython: boolean;
 }
 
-export interface Session {
-  id: string;
-  userId: string;
-  machineId: string;
-  token: string;
-  expiresAt: Date;
-  createdAt: Date;
-}
-
 // WebSocket Message Types
 export type WSMessageType =
   | 'auth'
   | 'auth_response'
-  | 'register_user'
-  | 'register_user_response'
   | 'register_machine'
   | 'machine_registered'
   | 'heartbeat'
@@ -81,25 +50,20 @@ export interface WSMessage<T = unknown> {
   payload: T;
 }
 
-// Auth messages
+// Auth messages — only token-based (Keycloak handles login/registration)
 export interface AuthPayload {
-  token?: string; // Existing JWT token
-  email?: string;
-  password?: string;
+  token: string;
 }
 
 export interface AuthResponse {
   success: boolean;
-  token?: string;
-  user?: Omit<User, 'passwordHash'>;
+  user?: {
+    id: string;
+    email: string;
+    username: string;
+    roles: string[];
+  };
   error?: string;
-}
-
-// User registration
-export interface RegisterUserPayload {
-  email: string;
-  username: string;
-  password: string;
 }
 
 // Machine registration
